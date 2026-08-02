@@ -3548,7 +3548,7 @@ class GeminiAnalyzer:
             }
 
             logger.info(f"[LLM调用] 开始调用 {model_name}...")
-            _emit_progress(68, f"{name}：LLM 已接收请求，等待响应")
+            _emit_progress(68, f"{name}：LLM 요청 수신, 응답 대기 중")
 
             # 使用 litellm 调用（支持完整性校验重试）
             current_prompt = prompt

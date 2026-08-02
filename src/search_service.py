@@ -2170,7 +2170,9 @@ class NaverSearchProvider(BaseSearchProvider):
                     import html
                     title = html.unescape(re.sub(r"<[^>]+>", "", item.get("title", "")))
                     description = html.unescape(re.sub(r"<[^>]+>", "", item.get("description", "")))
-                    pub_date = item.get("pubDate", "")[:16] if item.get("pubDate") else None
+                    # pubDate 전체 문자열 유지 (RFC 822: "Sun, 02 Aug 2026 10:30:00 +0900")
+                    # [:16] 슬라이싱 시 시간 정보가 잘려 날짜 파싱이 실패했음 — 전체 전달
+                    pub_date = item.get("pubDate", "") if item.get("pubDate") else None
                     results.append(SearchResult(
                         title=title,
                         snippet=description[:500],
@@ -4010,12 +4012,12 @@ class SearchService:
                         record_count=admitted_count,
                         error_type=None if admitted_count else "NoUsableNews",
                         error_message=None if admitted_count else (
-                            response.error_message or "过滤后无有效新闻"
+                            response.error_message or "필터 통과 후 유효 뉴스 없음"
                         ),
                     )
                     if not admitted_count:
                         logger.info(
-                            "%s 搜索成功但准入过滤后无有效新闻，继续尝试下一引擎",
+                            "%s 검색 성공했으나 필터 통과 후 유효 뉴스 없음, 다음 엔진 시도",
                             provider.name,
                         )
                         continue
@@ -4082,12 +4084,12 @@ class SearchService:
                         record_count=filtered_count,
                         error_type=None if filtered_count else "NoUsableNews",
                         error_message=None if filtered_count else (
-                            response.error_message or "过滤后无有效新闻"
+                            response.error_message or "필터 통과 후 유효 뉴스 없음"
                         ),
                     )
                     if response.success and not filtered_response.results:
                         logger.info(
-                            "%s 搜索成功但过滤后无有效新闻，继续尝试下一引擎",
+                            "%s 검색 성공했으나 필터 후 유효 뉴스 없음, 다음 엔진 시도",
                             provider.name,
                         )
                     else:

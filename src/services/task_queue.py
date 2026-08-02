@@ -150,7 +150,7 @@ class DuplicateTaskError(Exception):
     def __init__(self, stock_code: str, existing_task_id: str):
         self.stock_code = stock_code
         self.existing_task_id = existing_task_id
-        super().__init__(f"股票 {stock_code} 正在分析中 (task_id: {existing_task_id})")
+        super().__init__(f"종목 {stock_code} 분석 중 (task_id: {existing_task_id})")
 
 
 class AnalysisTaskQueue:
@@ -358,7 +358,7 @@ class AnalysisTaskQueue:
         """
         stock_code = resolve_index_stock_code_for_analysis(stock_code)
         if not stock_code:
-            raise ValueError("股票代码不能为空或仅包含空白字符")
+            raise ValueError("종목 코드가 비어있거나 공백만 포함됨")
 
         accepted, duplicates = self.submit_tasks_batch(
             [stock_code],
@@ -425,7 +425,7 @@ class AnalysisTaskQueue:
                     stock_code=stock_code,
                     stock_name=stock_name,
                     status=TaskStatus.PENDING,
-                    message="任务已加入队列",
+                    message="작업이 큐에 추가됨",
                     report_type=report_type,
                     analysis_phase=analysis_phase or "auto",
                     original_query=original_query,
@@ -474,7 +474,7 @@ class AnalysisTaskQueue:
         stock_code: str,
         stock_name: Optional[str] = None,
         report_type: str = "detailed",
-        message: Optional[str] = "任务已加入队列",
+        message: Optional[str] = "작업이 큐에 추가됨",
         task_id: Optional[str] = None,
         trace_id: Optional[str] = None,
         region: Optional[str] = None,
@@ -499,7 +499,7 @@ class AnalysisTaskQueue:
 
         with self._data_lock:
             if task_id in self._tasks:
-                raise ValueError(f"任务 ID 已存在: {task_id}")
+                raise ValueError(f"작업 ID 이미 존재: {task_id}")
             self._tasks[task_id] = task_info
             try:
                 future = self.executor.submit(self._execute_background_task, task_id, run_task)
@@ -698,7 +698,7 @@ class AnalysisTaskQueue:
             portfolio_context = dict(task.portfolio_context) if isinstance(task.portfolio_context, dict) else None
             task.status = TaskStatus.PROCESSING
             task.started_at = datetime.now()
-            task.message = "正在分析中..."
+            task.message = "분석 중..."
             task.progress = 10
         
         self._broadcast_event("task_started", task.to_dict())
@@ -749,7 +749,7 @@ class AnalysisTaskQueue:
                         task.progress = 100
                         task.completed_at = datetime.now()
                         task.result = result
-                        task.message = "分析完成"
+                        task.message = "분석 완료"
                         task.stock_name = result.get("stock_name", task.stock_name)
                         
                         # 从分析中集合移除
@@ -766,7 +766,7 @@ class AnalysisTaskQueue:
                 return result
             else:
                 # 分析返回空结果
-                raise Exception(service.last_error or "分析返回空结果")
+                raise Exception(service.last_error or "분석 결과가 비어있음")
                 
         except Exception as e:
             if "diag_token" in locals():
@@ -780,7 +780,7 @@ class AnalysisTaskQueue:
                     task.status = TaskStatus.FAILED
                     task.completed_at = datetime.now()
                     task.error = error_msg[:200]  # 限制错误信息长度
-                    task.message = f"分析失败: {error_msg[:50]}"
+                    task.message = f"분석 실패: {error_msg[:50]}"
                     
                     # 从分析中集合移除
                     dedupe_key = _dedupe_stock_code_key(task.stock_code)
@@ -817,7 +817,7 @@ class AnalysisTaskQueue:
             trace_id = task.trace_id or task_id
             task.status = TaskStatus.PROCESSING
             task.started_at = datetime.now()
-            task.message = "任务执行中"
+            task.message = "작업 실행 중"
             task.progress = 10
             self._broadcast_event("task_started", task.to_dict())
 
@@ -837,7 +837,7 @@ class AnalysisTaskQueue:
             finally:
                 reset_run_diagnostic_context(diag_token)
             if result is None:
-                raise RuntimeError("任务返回空结果，未生成可持久化内容")
+                raise RuntimeError("작업 결과가 비어있어 저장할 내용이 없음")
 
             with self._data_lock:
                 task = self._tasks.get(task_id)
@@ -846,7 +846,7 @@ class AnalysisTaskQueue:
                     task.progress = 100
                     task.completed_at = datetime.now()
                     task.result = result
-                    task.message = "任务执行完成"
+                    task.message = "작업 실행 완료"
 
             self._broadcast_event("task_completed", task.to_dict())
             logger.info(f"[TaskQueue] 自定义任务完成: {task_id}")
@@ -866,7 +866,7 @@ class AnalysisTaskQueue:
                     task.status = TaskStatus.FAILED
                     task.completed_at = datetime.now()
                     task.error = error_msg[:200]
-                    task.message = f"任务失败: {error_msg[:80]}"
+                    task.message = f"작업 실패: {error_msg[:80]}"
 
             if task:
                 self._broadcast_event("task_failed", task.to_dict())

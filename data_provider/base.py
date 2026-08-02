@@ -1143,35 +1143,18 @@ class DataFetcherManager:
         """
         初始化默认数据源列表
 
-        优先级动态调整逻辑：
-        - 如果配置了 TUSHARE_TOKEN：实例化 TushareFetcher，并按其内部逻辑提升优先级
-        - 如果配置了 Longbridge OAuth 或 Legacy 凭据：实例化 LongbridgeFetcher 作为美股/港股兜底
-        - 未配置的可选数据源不实例化，避免在批量拉取时反复探测无效源
-        - 默认优先级：
-          0. EfinanceFetcher (Priority 0) - 最高优先级
-          1. AkshareFetcher (Priority 1)
-          2. PytdxFetcher (Priority 2) - 通达信
-          3. BaostockFetcher (Priority 3)
-          4. YfinanceFetcher (Priority 4)
-          5. TencentFetcher (Priority 5) - A 股最终兜底
+        KR 포크 (2026-08-02): 중국 서비스 전면 제거 —
+        Efinance/Akshare/Pytdx/Baostock/Tencent(중국 소스) 제거,
+        YfinanceFetcher 최우선 (한국 KOSPI/KOSDAQ 지원).
+        可选数据源(API 키 설정 시): Longbridge/Finnhub/AlphaVantage/TickFlow/Tushare
         """
         from src.config import get_config
-        from .efinance_fetcher import EfinanceFetcher
-        from .tencent_fetcher import TencentFetcher
-        from .akshare_fetcher import AkshareFetcher
-        from .tushare_fetcher import TushareFetcher
-        from .tickflow_fetcher import TickFlowFetcher
-        from .pytdx_fetcher import PytdxFetcher
-        from .baostock_fetcher import BaostockFetcher
         from .yfinance_fetcher import YfinanceFetcher
         from .longbridge_fetcher import LongbridgeFetcher
+        from .tushare_fetcher import TushareFetcher
+        from .tickflow_fetcher import TickFlowFetcher
         config = get_config()
-        # 创建所有数据源实例（优先级在各 Fetcher 的 __init__ 中确定）
-        efinance = EfinanceFetcher()
-        tencent = TencentFetcher()
-        akshare = AkshareFetcher()
-        pytdx = PytdxFetcher()      # 通达信数据源（可配 PYTDX_HOST/PYTDX_PORT）
-        baostock = BaostockFetcher()
+        # YfinanceFetcher 최우선 (한국 주식 지원)
         yfinance = YfinanceFetcher()
         optional_fetchers: List[BaseFetcher] = []
 
@@ -1214,16 +1197,11 @@ class DataFetcherManager:
         else:
             logger.debug("[数据源初始化] 跳过未配置的 AlphaVantageFetcher")
 
-        # 初始化数据源列表
+        # 初始化数据源列表 (KR 포크: 중국 소스 제거, yfinance 최우선)
         self._ensure_concurrency_guards()
         with self._fetchers_lock:
             self._fetchers = [
-                efinance,
-                akshare,
-                pytdx,
-                baostock,
                 yfinance,
-                tencent,
                 *optional_fetchers,
             ]
 
@@ -1536,10 +1514,9 @@ class DataFetcherManager:
             return 0
         
         # 检查优先级中是否包含适合批量预取的数据源
-        # efinance/akshare_em/tushare 通过一次调用填充全市场缓存；
-        # tickflow 通过 symbols 批量接口预取当前自选股缓存。
+        # KR 포크: 중국 소스(efinance/akshare_em) 제거 — tickflow/tushare만 남김
         priority = config.realtime_source_priority.lower()
-        prefetch_sources = ['efinance', 'akshare_em', 'tushare', 'tickflow']
+        prefetch_sources = ['tickflow', 'tushare']
         
         # 如果优先级中前两个都不是可预取数据源，跳过预取
         # 因为新浪/腾讯是单股票查询，不需要预取
