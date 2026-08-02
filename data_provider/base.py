@@ -1752,6 +1752,14 @@ class DataFetcherManager:
 
         if is_jp or is_kr or is_tw:
             market_label = "日股" if is_jp else "韩股" if is_kr else "台股"
+            # KR 포크: FinanceDataReader 최우선 → yfinance 보조
+            quote = self._try_fetcher_quote(stock_code, "FinanceDataReaderFetcher")
+            if quote is not None:
+                logger.info(f"[实时行情] {market_label} {stock_code} 成功获取 (来源: FinanceDataReaderFetcher)")
+                return self._enrich_realtime_quote(
+                    quote,
+                    realtime_cache_ttl=getattr(config, "realtime_cache_ttl", None),
+                )
             quote = self._try_fetcher_quote(stock_code, "YfinanceFetcher")
             if quote is not None:
                 logger.info(f"[实时行情] {market_label} {stock_code} 成功获取 (来源: YfinanceFetcher)")
@@ -1764,19 +1772,19 @@ class DataFetcherManager:
             return None
 
         if is_us or is_hk:
-            prefer_lb = self._longbridge_preferred() and not is_us_index
+            # KR 포크: FinanceDataReader 우선, yfinance 보조 (Longbridge/중국 소스 미사용)
             if is_us:
-                primary_src = "LongbridgeFetcher" if prefer_lb else "YfinanceFetcher"
-                secondary_src = "YfinanceFetcher" if prefer_lb else "LongbridgeFetcher"
+                primary_src = "FinanceDataReaderFetcher"
+                secondary_src = "YfinanceFetcher"
                 market_label = "美股指数" if is_us_index else "美股"
                 primary_kw: dict = {}
                 secondary_kw: dict = {}
             else:
-                primary_src = "LongbridgeFetcher" if prefer_lb else "AkshareFetcher"
-                secondary_src = "AkshareFetcher" if prefer_lb else "LongbridgeFetcher"
+                primary_src = "YfinanceFetcher"
+                secondary_src = "LongbridgeFetcher"
                 market_label = "港股"
-                primary_kw = {"source": "hk"} if primary_src == "AkshareFetcher" else {}
-                secondary_kw = {"source": "hk"} if secondary_src == "AkshareFetcher" else {}
+                primary_kw = {}
+                secondary_kw = {}
 
             primary_token = self._realtime_fetcher_token(primary_src, **primary_kw)
             primary_quote = self._try_fetcher_quote(stock_code, primary_src, **primary_kw)
