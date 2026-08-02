@@ -2099,6 +2099,125 @@ class SearXNGSearchProvider(BaseSearchProvider):
         )
 
 
+class NaverSearchProvider(BaseSearchProvider):
+    """
+    Naver Open API (뉴스/블로그 검색) 검색 엔진
+
+    - 한국 뉴스 검색 최적화 (네이버 뉴스)
+    - 무료 API (하루 25,000회)
+    - Client ID / Client Secret 헤더 인증
+
+    문서: https://developers.naver.com/docs/serviceapi/search/news/news.md
+    """
+
+    def __init__(self, client_id: str, client_secret: str):
+        # BaseSearchProvider는 api_keys 리스트 기반 — Naver는 ID/Secret 쌍이므로
+        # 리스트에 client_id:client_secret 형태로 보관하고 name을 Naver로 설정
+        super().__init__([f"{client_id}:{client_secret}"] if client_id and client_secret else [], "Naver")
+
+    def _do_search(
+        self,
+        query: str,
+        api_key: str,
+        max_results: int,
+        days: int = 7,
+        topic: Optional[str] = None,
+    ) -> SearchResponse:
+        """Naver 뉴스 검색 실행"""
+        try:
+            client_id, client_secret = api_key.split(":", 1)
+        except ValueError:
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message="Naver API 키 형식 오류 (client_id:client_secret)",
+            )
+
+        headers = {
+            "X-Naver-Client-Id": client_id,
+            "X-Naver-Client-Secret": client_secret,
+        }
+
+        # 뉴스 검색 우선, 실패 시 블로그 검색으로 폴백
+        endpoints = [
+            ("news", "https://openapi.naver.com/v1/search/news.json"),
+        ]
+        if topic in ("general", None):
+            pass  # 뉴스만 사용 (시황/주식 뉴스에 적합)
+
+        errors = []
+        for display_name, url in endpoints:
+            try:
+                params = {
+                    "query": query,
+                    "display": min(max_results, 100),
+                    "sort": "date",
+                }
+                response = requests.get(
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=15,
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                results = []
+                for item in data.get("items", [])[:max_results]:
+                    # HTML 태그 제거
+                    import html
+                    title = html.unescape(re.sub(r"<[^>]+>", "", item.get("title", "")))
+                    description = html.unescape(re.sub(r"<[^>]+>", "", item.get("description", "")))
+                    pub_date = item.get("pubDate", "")[:16] if item.get("pubDate") else None
+                    results.append(SearchResult(
+                        title=title,
+                        snippet=description[:500],
+                        url=item.get("originallink") or item.get("link", ""),
+                        source=self._extract_domain(item.get("originallink") or item.get("link", "")),
+                        published_date=pub_date,
+                    ))
+
+                logger.info(
+                    "[Naver] 검색 완료: query='%s', %d건 반환",
+                    query,
+                    len(results),
+                )
+                return SearchResponse(
+                    query=query,
+                    results=results,
+                    provider=self.name,
+                    success=True,
+                )
+            except requests.HTTPError as exc:
+                if exc.response is not None and exc.response.status_code == 429:
+                    errors.append(f"Naver rate limit (429): {exc}")
+                else:
+                    errors.append(f"Naver {display_name} 검색 실패: {exc}")
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"Naver {display_name} 검색 실패: {exc}")
+
+        return SearchResponse(
+            query=query,
+            results=[],
+            provider=self.name,
+            success=False,
+            error_message="；".join(errors[:2]) if errors else "Naver 검색 불가",
+        )
+
+    @staticmethod
+    def _extract_domain(url: str) -> str:
+        """URL에서 도메인 추출 (출처 표기용)"""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.netloc.replace("www.", "")
+            return domain or "알 수 없는 출처"
+        except Exception:  # noqa: BLE001
+            return "알 수 없는 출처"
+
+
 class SearchService:
     """
     搜索服务
@@ -2118,6 +2237,15 @@ class SearchService:
         "{name} 股票 分析 走势图",
         "{name} K线 技术分析",
         "{name} {code} 涨跌 成交量",
+    ]
+
+    # 增强搜索关键词模板（韩国 KR 韩文 — .KS/.KQ 접미사 종목용）
+    ENHANCED_SEARCH_KEYWORDS_KR = [
+        "{name} 주가 오늘",
+        "{name} {code} 최신 시세 동향",
+        "{name} 주식 분석 차트",
+        "{name} 기술적 분석",
+        "{name} {code} 등락 거래량",
     ]
 
     # 增强搜索关键词模板（港股/美股 英文）
@@ -2271,6 +2399,8 @@ class SearchService:
         searxng_public_instances_enabled: bool = True,
         news_max_age_days: int = 3,
         news_strategy_profile: str = "short",
+        naver_client_id: Optional[str] = None,
+        naver_client_secret: Optional[str] = None,
     ):
         """
         初始化搜索服务
@@ -2289,6 +2419,11 @@ class SearchService:
         """
         self._providers: List[BaseSearchProvider] = []
         self.news_max_age_days = max(1, news_max_age_days)
+
+        # 0. Naver (한국 뉴스 검색 최적화, 무료 25,000회/일) — 최우선
+        if naver_client_id and naver_client_secret:
+            self._providers.append(NaverSearchProvider(naver_client_id, naver_client_secret))
+            logger.info("[search] Naver 뉴스 검색 활성화 (최우선)")
         raw_profile = (news_strategy_profile or "short").strip().lower()
         self.news_strategy_profile = normalize_news_strategy_profile(news_strategy_profile)
         if raw_profile != self.news_strategy_profile:
@@ -2387,6 +2522,19 @@ class SearchService:
         # 与 00700.HK 后缀全部归一为 00700 形式，原 lower.startswith('hk')
         # 分支在 canonical 之后为不可达死代码，已删除。
         if code.isdigit() and len(code) == 5:
+            return True
+        return False
+
+    @staticmethod
+    def _is_korean_stock(stock_code: str) -> bool:
+        """한국 주식(.KS/.KQ 접미사 또는 6자리 숫자 코드) 여부 — 한국어 검색어 사용"""
+        code = str(stock_code or "").strip()
+        upper = code.upper()
+        if upper.endswith(".KS") or upper.endswith(".KQ"):
+            return True
+        # 6자리 숫자 = 한국 종목 코드 (005930 등)
+        base = upper.split(".")[0]
+        if base.isdigit() and len(base) == 6:
             return True
         return False
 
@@ -4065,9 +4213,68 @@ class SearchService:
         search_count = 0
 
         is_foreign = self._is_foreign_stock(stock_code)
+        is_korean = self._is_korean_stock(stock_code)
         is_index_etf = self.is_index_or_etf(stock_code, stock_name)
 
-        if is_foreign:
+        if is_korean:
+            # 한국 종목 — 한국어 쿼리 (Naver 뉴스 검색에 적합)
+            search_dimensions = [
+                {
+                    'name': 'latest_news',
+                    'query': f"{stock_name} {stock_code} 최신 뉴스 주요 이벤트",
+                    'desc': '최신 소식',
+                    'tavily_topic': 'news',
+                    'strict_freshness': True,
+                },
+                {
+                    'name': 'market_analysis',
+                    'query': f"{stock_name} 리포트 목표주가 투자의견 분석",
+                    'desc': '기관 분석',
+                    'tavily_topic': None,
+                    'strict_freshness': False,
+                },
+                {
+                    'name': 'risk_check',
+                    'query': (
+                        f"{stock_name} 지수 추세 추적오차 순자산 성과"
+                        if is_index_etf else f"{stock_name} 지분 매도 제재 위반 소송 리스크 악재"
+                    ),
+                    'desc': '리스크 점검',
+                    'tavily_topic': None if is_index_etf else 'news',
+                    'strict_freshness': not is_index_etf,
+                },
+                {
+                    'name': 'announcements',
+                    'query': (
+                        f"{stock_name} {stock_code} 공시 지수 조정 구성 변화"
+                        if is_index_etf else f"{stock_name} {stock_code} 공시 중요 공지"
+                    ),
+                    'desc': '기업 공시',
+                    'tavily_topic': 'news',
+                    'strict_freshness': True,
+                },
+                {
+                    'name': 'earnings',
+                    'query': (
+                        f"{stock_name} 지수 구성 순자산 추적 성과"
+                        if is_index_etf else f"{stock_name} 실적 전망 매출 영업이익 성장률"
+                    ),
+                    'desc': '실적 전망',
+                    'tavily_topic': None,
+                    'strict_freshness': False,
+                },
+                {
+                    'name': 'industry',
+                    'query': (
+                        f"{stock_name} 지수 구성 종목 섹터 비중"
+                        if is_index_etf else f"{stock_name} 업계 경쟁사 시장 점유율 업종 전망"
+                    ),
+                    'desc': '업계 분석',
+                    'tavily_topic': None,
+                    'strict_freshness': False,
+                },
+            ]
+        elif is_foreign:
             # Issue #2026: Foreign-ticker English alias resolution from the
             # single source of truth (STOCK_ENGLISH_NAME_MAP in
             # src/data/stock_mapping.py). When STOCK_NAME_MAP maps the ticker
@@ -4426,7 +4633,12 @@ class SearchService:
         
         # 使用多个关键词模板搜索
         is_foreign = self._is_foreign_stock(stock_code)
-        keywords = self.ENHANCED_SEARCH_KEYWORDS_EN if is_foreign else self.ENHANCED_SEARCH_KEYWORDS
+        if self._is_korean_stock(stock_code):
+            keywords = self.ENHANCED_SEARCH_KEYWORDS_KR
+        elif is_foreign:
+            keywords = self.ENHANCED_SEARCH_KEYWORDS_EN
+        else:
+            keywords = self.ENHANCED_SEARCH_KEYWORDS
         for i, keyword_template in enumerate(keywords[:max_attempts]):
             query = keyword_template.format(name=stock_name, code=stock_code)
             
@@ -4584,6 +4796,8 @@ def get_search_service() -> SearchService:
                     searxng_public_instances_enabled=config.searxng_public_instances_enabled,
                     news_max_age_days=config.news_max_age_days,
                     news_strategy_profile=getattr(config, "news_strategy_profile", "short"),
+                    naver_client_id=getattr(config, "naver_client_id", ""),
+                    naver_client_secret=getattr(config, "naver_client_secret", ""),
                 )
     
     return _search_service

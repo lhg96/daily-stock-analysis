@@ -614,7 +614,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             "us": "美股市场" if review_language == "zh" else "US market",
             "hk": "港股市场" if review_language == "zh" else "HK market",
             "jp": "日本股市" if review_language == "zh" else "Japan stock market",
-            "kr": "韩国股市" if review_language == "zh" else "Korea stock market",
+            "kr": "한국 주식시장" if review_language == "ko" else ("韩国股市" if review_language == "zh" else "Korea stock market"),
         }
         
         try:

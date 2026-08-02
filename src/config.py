@@ -75,6 +75,83 @@ from src.utils.market_review_region import normalize_market_review_region_lenien
 
 logger = logging.getLogger(__name__)
 
+
+def _keychain_get(service: str, account: str = "dsa") -> Optional[str]:
+    """macOS 키체인에서 비밀값 읽기. 실패 시 None 반환.
+
+    `security find-generic-password -s <service> -a <account> -w` 로 조회한다.
+    launchd(GUI 세션)에서 실행되면 키체인 접근이 가능하다.
+    """
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", service, "-a", account, "-w"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[keychain] %s 조회 실패: %s", service, exc)
+    return None
+
+
+def _keychain_set(service: str, value: str, account: str = "dsa") -> bool:
+    """macOS 키체인에 비밀값 저장 (없으면 추가, 있으면 갱신)."""
+    try:
+        import subprocess
+        add = subprocess.run(
+            ["security", "add-generic-password", "-s", service, "-a", account, "-w", value, "-U"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if add.returncode == 0:
+            return True
+        # add 실패 시 update 시도
+        update = subprocess.run(
+            ["security", "add-generic-password", "-s", service, "-a", account, "-w", value, "-U"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return update.returncode == 0
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[keychain] %s 저장 실패: %s", service, exc)
+    return False
+
+
+def _resolve_secret_from_env_or_keychain(
+    env_value: str,
+    keychain_service: str,
+    keychain_account: str = "dsa",
+    auto_store: bool = False,
+) -> str:
+    """환경변수 값이 `keychain:<service>` 형태면 키체인에서 읽고,
+    아니면 환경변수 값을 그대로 사용한다.
+
+    auto_store=True 이고 평문 값이면 키체인에 자동 저장을 시도한다
+    (GUI 세션에서 실행될 때만 가능 — SSH에서는 저장이 차단됨).
+    """
+    value = (env_value or "").strip()
+    if not value:
+        return ""
+    if value.startswith("keychain:"):
+        service = value.split(":", 1)[1].strip() or keychain_service
+        stored = _keychain_get(service, keychain_account)
+        if stored:
+            return stored
+        logger.warning("[keychain] %s 키체인 항목을 찾지 못함", service)
+        return ""
+    if auto_store:
+        stored = _keychain_get(keychain_service, keychain_account)
+        if not stored:
+            if _keychain_set(keychain_service, value, keychain_account):
+                logger.info("[keychain] %s 키체인에 저장 완료", keychain_service)
+    return value
+
+
 @dataclass
 class ConfigIssue:
     """Structured configuration validation issue with a severity level.
@@ -817,6 +894,8 @@ class Config:
     serpapi_keys: List[str] = field(default_factory=list)  # SerpAPI Keys
     searxng_base_urls: List[str] = field(default_factory=list)  # SearXNG instance URLs (self-hosted, no quota)
     searxng_public_instances_enabled: bool = True  # Auto-discover public SearXNG instances when base URLs are absent
+    naver_client_id: str = ""  # Naver Open API Client ID (keychain:<service> 지원)
+    naver_client_secret: str = ""  # Naver Open API Client Secret (keychain:<service> 지원)
 
     # === Social Sentiment (US stocks only, api.adanos.org) ===
     social_sentiment_api_key: Optional[str] = None
@@ -1047,7 +1126,9 @@ class Config:
     # - akshare_sina: 新浪财经，基本行情稳定，但无量比
     # - efinance/akshare_em: 东财全量接口，数据最全但容易被封
     # - tushare: Tushare Pro，需要2000积分，数据全面（付费用户可优先使用）
-    realtime_source_priority: str = "tencent,akshare_sina,efinance,akshare_em"
+    # NOTE (2026-08-02, KR 포크): 중국 서비스(tencent/akshare/efinance) 제거 —
+    #   yfinance 우선 (한국 KOSPI/KOSDAQ 지원), finnhub/alphavantage 보조
+    realtime_source_priority: str = "yfinance,finnhub,alphavantage"
     # 实时行情缓存时间（秒）
     realtime_cache_ttl: int = 600
     # 熔断器冷却时间（秒）
@@ -1528,6 +1609,20 @@ class Config:
         brave_keys_str = os.getenv('BRAVE_API_KEYS', '')
         brave_api_keys = [k.strip() for k in brave_keys_str.split(',') if k.strip()]
 
+        # Naver Open API — keychain:<service> 형식 지원 (키체인에 비밀값 보관)
+        naver_client_id = _resolve_secret_from_env_or_keychain(
+            os.getenv('NAVER_CLIENT_ID', ''),
+            keychain_service='naver-openapi-client-id',
+            auto_store=True,
+        )
+        naver_client_secret = _resolve_secret_from_env_or_keychain(
+            os.getenv('NAVER_CLIENT_SECRET', ''),
+            keychain_service='naver-openapi-client-secret',
+            auto_store=True,
+        )
+        if naver_client_id and naver_client_secret:
+            logger.info("[config] Naver Open API 검색 활성화 (Client ID: %s...)", naver_client_id[:4])
+
         _raw_urls = [u.strip() for u in os.getenv('SEARXNG_BASE_URLS', '').split(',') if u.strip()]
         searxng_base_urls = []
         invalid_searxng_urls = []
@@ -1703,6 +1798,8 @@ class Config:
             brave_api_keys=brave_api_keys,
             serpapi_keys=serpapi_keys,
             searxng_base_urls=searxng_base_urls,
+            naver_client_id=naver_client_id,
+            naver_client_secret=naver_client_secret,
             searxng_public_instances_enabled=searxng_public_instances_enabled,
             social_sentiment_api_key=os.getenv('SOCIAL_SENTIMENT_API_KEY') or None,
             social_sentiment_api_url=os.getenv('SOCIAL_SENTIMENT_API_URL', 'https://api.adanos.org').rstrip('/'),
@@ -2638,7 +2735,8 @@ class Config:
         so that the paid data source is utilized for realtime quotes as well.
         """
         explicit = os.getenv('REALTIME_SOURCE_PRIORITY')
-        default_priority = 'tencent,akshare_sina,efinance,akshare_em'
+        # KR 포크 (2026-08-02): 중국 소스 제거, yfinance 우선
+        default_priority = 'yfinance,finnhub,alphavantage'
 
         if explicit:
             # User explicitly set priority, respect it

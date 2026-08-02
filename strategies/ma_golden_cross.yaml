@@ -2,7 +2,7 @@
 # MA5 crosses above MA10 (or MA10 above MA20) with volume confirmation.
 
 name: ma_golden_cross
-display_name: 均线金叉
+display_name: 이동평균 골든크로스
 description: 检测均线金叉配合量能确认信号，经典的趋势反转/延续信号。
 category: trend
 core_rules: [1, 2, 3]

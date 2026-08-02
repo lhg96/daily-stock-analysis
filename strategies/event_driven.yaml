@@ -1,7 +1,7 @@
 # Event Driven Strategy / 事件驱动
 
 name: event_driven
-display_name: 事件驱动
+display_name: 이벤트 주도
 description: 围绕业绩、政策、并购、订单、产品发布等事件，评估催化强度、兑现概率和风险边界。
 category: framework
 core_rules: [3, 5]

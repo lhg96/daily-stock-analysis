@@ -41,11 +41,11 @@ logger = logging.getLogger(__name__)
 MARKET_REVIEW_HISTORY_CODE = "MARKET"
 MARKET_REVIEW_REPORT_TYPE = "market_review"
 _MARKET_REVIEW_MARKETS = (
-    ('cn', 'cn_title', 'A 股'),
-    ('hk', 'hk_title', '港股'),
-    ('us', 'us_title', '美股'),
-    ('jp', 'jp_title', '日股'),
-    ('kr', 'kr_title', '韩股'),
+    ('cn', 'cn_title', 'A주'),
+    ('hk', 'hk_title', '홍콩'),
+    ('us', 'us_title', '미국'),
+    ('jp', 'jp_title', '일본'),
+    ('kr', 'kr_title', '한국'),
 )
 _MARKET_REVIEW_REGION_ORDER = MARKET_REVIEW_REGION_ORDER
 
@@ -137,13 +137,13 @@ def _get_market_review_text(language: str) -> dict[str, str]:
         }
     return {
         "root_title": "# 🎯 大盘复盘",
-        "push_title": "🎯 大盘复盘",
+        "push_title": "🎯 시장 리뷰",
         "cn_title": "# A股大盘复盘",
         "us_title": "# 美股大盘复盘",
         "hk_title": "# 港股大盘复盘",
         "jp_title": "# 日股大盘复盘",
         "kr_title": "# 韩股大盘复盘",
-        "separator": "> 以下为下一市场大盘复盘",
+        "separator": "> 다음 시장 리뷰",
     }
 
 
@@ -720,6 +720,8 @@ def _render_sector_payload_block(payload: Dict[str, Any]) -> str:
     if top:
         if language == "en":
             lines.extend(["#### Leading Sectors", "| Rank | Sector | Change |", "|------|--------|--------|"])
+        elif language == "ko":
+            lines.extend(["#### 강세 섹터 Top 5", "| 순위 | 섹터 | 등락률 |", "|------|------|--------|"])
         else:
             lines.extend(["#### 领涨板块 Top 5", "| 排名 | 板块 | 涨跌幅 |", "|------|------|--------|"])
         for rank, sector in enumerate(top[:5], 1):
@@ -732,6 +734,8 @@ def _render_sector_payload_block(payload: Dict[str, Any]) -> str:
             lines.append("")
         if language == "en":
             lines.extend(["#### Lagging Sectors", "| Rank | Sector | Change |", "|------|--------|--------|"])
+        elif language == "ko":
+            lines.extend(["#### 약세 섹터 Top 5", "| 순위 | 섹터 | 등락률 |", "|------|------|--------|"])
         else:
             lines.extend(["#### 领跌板块 Top 5", "| 排名 | 板块 | 涨跌幅 |", "|------|------|--------|"])
         for rank, sector in enumerate(bottom[:5], 1):
@@ -782,9 +786,9 @@ def _persist_market_review_history(
             operation_advice = "리뷰 보기"
             trend_prediction = "시황 리뷰"
         else:
-            stock_name = "大盘复盘"
-            operation_advice = "查看复盘"
-            trend_prediction = "大盘复盘"
+            stock_name = "시장 리뷰"
+            operation_advice = "리뷰 보기"
+            trend_prediction = "시장 리뷰"
 
         result = AnalysisResult(
             code=MARKET_REVIEW_HISTORY_CODE,
@@ -887,7 +891,7 @@ def _build_market_review_context_overview(
     label = (
         "Market review" if report_language == "en"
         else "시황 리뷰" if report_language == "ko"
-        else "大盘复盘"
+        else "시장 리뷰"
     )
     return {
         "pack_version": "market_review/1.0",
@@ -929,4 +933,4 @@ def _summarize_market_review(review_report: str, report_language: str) -> str:
         return "Market review report generated."
     if report_language == "ko":
         return "시황 리뷰 리포트가 생성되었습니다."
-    return "大盘复盘报告已生成。"
+    return "시장 리뷰 보고서가 생성되었습니다."

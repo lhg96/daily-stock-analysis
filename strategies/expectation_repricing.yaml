@@ -1,7 +1,7 @@
 # Expectation Repricing Strategy / 预期重估
 
 name: expectation_repricing
-display_name: 预期重估
+display_name: 기대치 재평가
 description: 分析业绩预期、政策预期和估值预期的变化，寻找预期差修复或预期过热后的回落风险。
 category: framework
 core_rules: [3, 5, 6]

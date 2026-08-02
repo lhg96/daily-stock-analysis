@@ -83,9 +83,10 @@ KR_PROFILE = MarketProfile(
     region="kr",
     mood_index_code="KS11",
     news_queries=[
-        "韩国股市 KOSPI",
+        "코스피 코스닥 시장 동향",
+        "한국 주식시장 KOSPI KOSDAQ",
+        "KOSPI KOSDAQ 주가 지수",
         "Korea stock market KOSPI KOSDAQ",
-        "KOSPI KOSDAQ 行情",
     ],
     prompt_index_hint="分析 KOSPI、KOSDAQ 等韩国主要指数走势特点",
     has_market_stats=False,

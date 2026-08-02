@@ -107,6 +107,8 @@ def build_market_review_runtime(
             ),
             news_max_age_days=getattr(config, "news_max_age_days", 3),
             news_strategy_profile=getattr(config, "news_strategy_profile", "short"),
+            naver_client_id=getattr(config, "naver_client_id", ""),
+            naver_client_secret=getattr(config, "naver_client_secret", ""),
         )
 
     analyzer = None
