@@ -1127,8 +1127,8 @@ class Config:
     # - efinance/akshare_em: 东财全量接口，数据最全但容易被封
     # - tushare: Tushare Pro，需要2000积分，数据全面（付费用户可优先使用）
     # NOTE (2026-08-02, KR 포크): 중국 서비스(tencent/akshare/efinance) 제거 —
-    #   yfinance 우선 (한국 KOSPI/KOSDAQ 지원), finnhub/alphavantage 보조
-    realtime_source_priority: str = "yfinance,finnhub,alphavantage"
+    #   FinanceDataReader 최우선 (한국/미국 안정적), yfinance/finnhub/alphavantage 보조
+    realtime_source_priority: str = "fdr,yfinance,finnhub,alphavantage"
     # 实时行情缓存时间（秒）
     realtime_cache_ttl: int = 600
     # 熔断器冷却时间（秒）
@@ -2735,8 +2735,8 @@ class Config:
         so that the paid data source is utilized for realtime quotes as well.
         """
         explicit = os.getenv('REALTIME_SOURCE_PRIORITY')
-        # KR 포크 (2026-08-02): 중국 소스 제거, yfinance 우선
-        default_priority = 'yfinance,finnhub,alphavantage'
+        # KR 포크 (2026-08-02): 중국 소스 제거, FinanceDataReader 최우선
+        default_priority = 'fdr,yfinance,finnhub,alphavantage'
 
         if explicit:
             # User explicitly set priority, respect it

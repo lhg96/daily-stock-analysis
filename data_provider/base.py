@@ -1149,12 +1149,14 @@ class DataFetcherManager:
         可选数据源(API 키 설정 시): Longbridge/Finnhub/AlphaVantage/TickFlow/Tushare
         """
         from src.config import get_config
+        from .fdr_fetcher import FinanceDataReaderFetcher
         from .yfinance_fetcher import YfinanceFetcher
         from .longbridge_fetcher import LongbridgeFetcher
         from .tushare_fetcher import TushareFetcher
         from .tickflow_fetcher import TickFlowFetcher
         config = get_config()
-        # YfinanceFetcher 최우선 (한국 주식 지원)
+        # FinanceDataReader 최우선 (한국/미국 안정적), yfinance 보조
+        fdr_fetcher = FinanceDataReaderFetcher()
         yfinance = YfinanceFetcher()
         optional_fetchers: List[BaseFetcher] = []
 
@@ -1197,10 +1199,11 @@ class DataFetcherManager:
         else:
             logger.debug("[数据源初始化] 跳过未配置的 AlphaVantageFetcher")
 
-        # 初始化数据源列表 (KR 포크: 중국 소스 제거, yfinance 최우선)
+        # 初始化数据源列表 (KR 포크: 중국 소스 제거, FDR 최우선 → yfinance 보조)
         self._ensure_concurrency_guards()
         with self._fetchers_lock:
             self._fetchers = [
+                fdr_fetcher,
                 yfinance,
                 *optional_fetchers,
             ]
@@ -1872,6 +1875,16 @@ class DataFetcherManager:
 
                 elif source == "tickflow":
                     fetcher = self._get_fetcher_by_name("TickFlowFetcher", capability="realtime_quote")
+                    if fetcher is not None and hasattr(fetcher, 'get_realtime_quote'):
+                        record_provider_run_started(
+                            data_type="realtime_quote",
+                            provider=fetcher.name,
+                            operation="get_realtime_quote",
+                        )
+                        quote = self._call_fetcher_method(fetcher, 'get_realtime_quote', raw_stock_code or stock_code)
+
+                elif source in ("fdr", "financedatareader"):
+                    fetcher = self._get_fetcher_by_name("FinanceDataReaderFetcher", capability="realtime_quote")
                     if fetcher is not None and hasattr(fetcher, 'get_realtime_quote'):
                         record_provider_run_started(
                             data_type="realtime_quote",
