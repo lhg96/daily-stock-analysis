@@ -4,17 +4,15 @@
 
 > **🇰🇷 한국어/한국 시장 커스터마이즈 포크** — 원본: [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) · 2026-08-02 분리
 > 한국어 UI, 한국 시장 중심(MARKET_REVIEW_REGION=kr), 중국(CN) 시장·중국어 제거
+>
+> **프로젝트 개요** — AI 대형 언어 모델 기반의 한국어 주식 자동 분석 시스템입니다. 매일 자동으로 관심 종목의 시세·뉴스·공시를 수집해 AI가 매수/매도/관망 판단, 점수, 리스크 경고, 매매 포인트를 담은 '결정 대시보드'를 생성하고 Telegram/Discord/Slack/이메일 등으로 푸시합니다.
 
-[![GitHub stars](https://img.shields.io/github/stars/ZhuLinsen/daily_stock_analysis?style=social)](https://github.com/lhg96/daily-stock-analysis/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/lhg96/daily-stock-analysis?style=social)](https://github.com/lhg96/daily-stock-analysis/stargazers)
 [![CI](https://github.com/lhg96/daily-stock-analysis/actions/workflows/ci.yml/badge.svg)](https://github.com/lhg96/daily-stock-analysis/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Ready-2088FF?logo=github-actions&logoColor=white)](https://github.com/features/actions)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/zhulinsen/daily_stock_analysis)
-
-<p align="center">
-  <img src="https://trendshift.io/api/badge/trendshift/repositories/18527/daily?language=Python" alt="#1 Python Repository Of The Day | Trendshift" width="250" height="55"/>&nbsp;<a href="https://hellogithub.com/repository/ZhuLinsen/daily_stock_analysis" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=6daa16e405ce46ed97b4a57706aeb29f&claim_uid=pfiJMqhR9uvDGlT&theme=neutral" alt="Featured｜HelloGitHub" width="230" /></a>
-</p>
 
 > 🤖 基于 AI 大模型的 A股/港股/美股/日股/韩股/台股自选股智能分析系统，每日自动分析并推送「决策仪表盘」到企业微信/飞书/Telegram/Discord/Slack/邮箱
 
@@ -62,6 +60,42 @@
 | 社交舆情 | [Stock Sentiment API](https://api.adanos.org/docs)（Reddit / X / Polymarket，仅美股，可选） |
 
 > 项目默认内置 AkShare、Baostock、YFinance 等免费行情源，可零配置运行；免费源受上游限流、接口变动和网络波动影响，稳定性不保证。长期定时、批量分析或更稳定行情建议配置 TickFlow、Tushare、Longbridge 等 token 型数据源，适用市场、Actions 映射和 fallback 规则见 [数据源配置](docs/full-guide.md#数据源配置)。
+
+## 🛠️ 기술 스택 (Tech Stack)
+
+![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)
+![Telegram](https://img.shields.io/badge/Telegram-26A5E4?logo=telegram&logoColor=white)
+![Discord](https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white)
+![Slack](https://img.shields.io/badge/Slack-4A154B?logo=slack&logoColor=white)
+
+| 영역 | 기술 |
+|------|------|
+| **언어/프레임워크** | Python 3.10+, FastAPI, Pydantic |
+| **LLM** | OpenAI 호환 API, Gemini, Claude, DeepSeek, Ollama 등 |
+| **시세 데이터** | AkShare, Tushare, Baostock, YFinance, TickFlow, Longbridge |
+| **알림** | Telegram, Discord, Slack, 이메일, 기업微信, 飞书 |
+| **배포** | Docker, GitHub Actions, systemd |
+
+## 📁 프로젝트 구조 (Project Structure)
+
+```
+daily-stock-analysis/
+├── main.py              # 분석 태스크 메인 엔트리
+├── server.py            # FastAPI 서비스 엔트리
+├── src/                 # 핵심 로직 (core / services / reports / schemas)
+├── data_provider/       # 멀티 데이터소스 어댑터 & fallback
+├── api/                 # FastAPI API
+├── bot/                 # 봇 / 메신저 연동
+├── apps/                # Web(dsa-web) / Desktop(dsa-desktop)
+├── strategies/          # 분석 전략 & 에이전트
+├── docker/              # Docker 배포 설정
+├── scripts/             # 유틸리티 스크립트
+├── docs/                # 문서 (가이드, 설정, 시장 지원)
+└── tests/               # pytest 테스트
+```
 
 ## 🚀 快速开始
 
@@ -156,13 +190,13 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/lhg96/daily-stock-analysis.git && cd daily_stock_analysis
+git clone https://github.com/lhg96/daily-stock-analysis.git && cd daily-stock-analysis
 
 # 安装依赖
 pip install -r requirements.txt
 
-# 配置环境变量
-cp .env.example .env && vim .env
+# 配置环境变量（API 키 등 전체 변수 목록은 docs/full-guide.md 참고)
+# 저장소에 .env.example이 없으므로 docs/full-guide.md 의 변수 목록을 참고해 .env 파일을 직접 생성하세요.
 
 # 运行分析
 python main.py
